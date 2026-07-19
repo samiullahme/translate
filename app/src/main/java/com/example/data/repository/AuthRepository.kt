@@ -16,7 +16,7 @@ import retrofit2.converter.moshi.MoshiConverterFactory
 import java.util.concurrent.TimeUnit
 
 class AuthRepository(context: Context) {
-    private val sessionManager = SessionManager(context)
+    val sessionManager = SessionManager(context)
     private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
     
     private val _currentProfile = MutableStateFlow<Profile?>(null)
@@ -25,7 +25,7 @@ class AuthRepository(context: Context) {
     private val _isCheckingSession = MutableStateFlow(true)
     val isCheckingSession: StateFlow<Boolean> = _isCheckingSession
 
-    private var supabaseApi: SupabaseApi? = null
+    var supabaseApi: SupabaseApi? = null
     private val supabaseUrl = BuildConfig.SUPABASE_URL
     private val supabaseAnonKey = BuildConfig.SUPABASE_ANON_KEY
 

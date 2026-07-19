@@ -27,6 +27,18 @@ import com.example.ui.home.HomeScreen
 import com.example.ui.profile.ProfileScreen
 import kotlinx.coroutines.launch
 
+import com.example.ui.scanner.ScannerScreen
+import com.example.ui.scanner.ScannerViewModel
+import com.example.data.remote.AiProxyApi
+import androidx.lifecycle.ViewModelProvider
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Retrofit
+import retrofit2.converter.moshi.MoshiConverterFactory
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import com.example.BuildConfig
+
 enum class MainTab {
     HOME,
     PROFILE
@@ -43,7 +55,26 @@ fun AppNavigation(
     
     val currentProfile by authViewModel.currentProfile.collectAsState()
     val isCheckingSession by authViewModel.isCheckingSession.collectAsState()
+    
+    // Create AiProxyApi lazily once
+    val aiProxyApi = remember {
+        val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
+        val loggingInterceptor = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        }
+        val client = OkHttpClient.Builder().addInterceptor(loggingInterceptor).build()
+        
+        Retrofit.Builder()
+            .baseUrl(if (BuildConfig.BACKEND_URL.endsWith("/")) BuildConfig.BACKEND_URL else "${BuildConfig.BACKEND_URL}/")
+            .client(client)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(AiProxyApi::class.java)
+    }
 
+    var isScannerOpen by remember { mutableStateOf(false) }
+    var selectedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -130,7 +161,11 @@ fun AppNavigation(
                             when (targetTab) {
                                 MainTab.HOME -> {
                                     HomeScreen(
-                                        userName = profile.name ?: "User"
+                                        userName = profile.name ?: "User",
+                                        onImageSelected = { uri ->
+                                            selectedImageUri = uri
+                                            isScannerOpen = true
+                                        }
                                     )
                                 }
                                 MainTab.PROFILE -> {
@@ -152,6 +187,38 @@ fun AppNavigation(
                         }
                     }
                 }
+            }
+        }
+
+        // Scanner Screen Overlay
+        if (isScannerOpen && currentProfile != null) {
+            val scannerViewModel: ScannerViewModel = viewModel(
+                factory = object : ViewModelProvider.Factory {
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        return ScannerViewModel(
+                            supabaseApi = authRepository.supabaseApi!!,
+                            aiProxyApi = aiProxyApi,
+                            sessionManager = authRepository.sessionManager
+                        ) as T
+                    }
+                }
+            )
+            val context = androidx.compose.ui.platform.LocalContext.current
+            
+            LaunchedEffect(selectedImageUri) {
+                selectedImageUri?.let {
+                    scannerViewModel.processImage(context, it)
+                }
+            }
+            
+            Box(modifier = Modifier.fillMaxSize()) {
+                ScannerScreen(
+                    viewModel = scannerViewModel,
+                    onClose = {
+                        isScannerOpen = false
+                        selectedImageUri = null
+                    }
+                )
             }
         }
     }

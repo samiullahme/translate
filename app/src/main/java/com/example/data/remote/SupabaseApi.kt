@@ -38,4 +38,20 @@ interface SupabaseApi {
         @Query("id") filter: String,
         @Body profileUpdate: Map<String, String?>
     ): Response<Unit>
+
+    @POST("rest/v1/documents")
+    suspend fun createDocument(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") token: String,
+        @Header("Prefer") prefer: String = "return=representation",
+        @Body document: DocumentInsertRequest
+    ): Response<List<Document>>
+
+    @PATCH("rest/v1/documents")
+    suspend fun updateDocument(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") token: String,
+        @Query("id") filter: String,
+        @Body document: DocumentUpdateRequest
+    ): Response<Unit>
 }
