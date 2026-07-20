@@ -86,7 +86,7 @@ class ScannerViewModel(
                 _stage.value = PipelineStage.SCANNING
                 val ocrRes = aiProxyApi.extractText("Bearer $token", body)
                 if (!ocrRes.isSuccessful) {
-                    throw Exception("OCR Failed: ${ocrRes.errorBody()?.string()}")
+                    throw Exception(formatOcrFailure(ocrRes.errorBody()?.string()))
                 }
                 
                 val extractedText = ocrRes.body()?.text ?: throw Exception("Empty OCR result")
@@ -151,5 +151,14 @@ class ScannerViewModel(
     fun cancel() {
         // Simple cancel implementation. Proper cancellation requires Job handling.
         reset()
+    }
+
+    private fun formatOcrFailure(raw: String?): String {
+        val body = raw?.trim().orEmpty()
+        if (body.isEmpty()) return "OCR failed"
+        // FastAPI: {"detail":{"status":"failed","error_message":"..."}}
+        val msgMatch = Regex("\"error_message\"\\s*:\\s*\"([^\"]+)\"").find(body)
+        if (msgMatch != null) return msgMatch.groupValues[1]
+        return "OCR failed: $body"
     }
 }

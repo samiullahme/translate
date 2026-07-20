@@ -15,6 +15,8 @@ import kotlin.math.max
 object ImageCompressor {
     private const val MAX_EDGE_PX = 1600
     private const val JPEG_QUALITY = 70
+    /** API Ninjas free tier limit is 200KB; stay under with margin. */
+    private const val MAX_BYTES = 180 * 1024
 
     suspend fun compressImage(context: Context, uri: Uri): File? = withContext(Dispatchers.IO) {
         try {
@@ -30,10 +32,9 @@ object ImageCompressor {
             val is2 = context.contentResolver.openInputStream(uri) ?: return@withContext null
             val originalBitmap = BitmapFactory.decodeStream(is2)
             is2.close()
-            
+
             if (originalBitmap == null) return@withContext null
 
-            // Rotation
             val matrix = Matrix()
             when (orientation) {
                 ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
@@ -47,7 +48,6 @@ object ImageCompressor {
                 matrix, true
             )
 
-            // Scaling
             val width = rotatedBitmap.width
             val height = rotatedBitmap.height
             val largestEdge = max(width, height)
@@ -61,12 +61,16 @@ object ImageCompressor {
                 rotatedBitmap
             }
 
-            // Save to temp file
             val tempFile = File(context.cacheDir, "compressed_${System.currentTimeMillis()}.jpg")
-            FileOutputStream(tempFile).use { out ->
-                scaledBitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
-            }
-            
+            var quality = JPEG_QUALITY
+            do {
+                FileOutputStream(tempFile).use { out ->
+                    scaledBitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
+                }
+                if (tempFile.length() <= MAX_BYTES || quality <= 40) break
+                quality -= 10
+            } while (true)
+
             return@withContext tempFile
         } catch (e: Exception) {
             e.printStackTrace()
